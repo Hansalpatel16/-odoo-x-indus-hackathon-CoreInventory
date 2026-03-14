@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>CoreInventory Pro | obsidian_enterprise_final_v4</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/html5-qrcode"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;500;700&display=swap');
+        :root { --obsidian: #08080a; --slate-depth: #121214; --accent: #6366f1; }
+        body { font-family: 'Space Grotesk', sans-serif; background-color: var(--obsidian); color: #e2e8f0; overflow: hidden; }
+        .formal-dark { background-color: var(--slate-depth); border: 1px solid rgba(255,255,255,0.05); }
+        .sidebar-dark { background-color: #0d0d0f; border-right: 1px solid #1e1e24; }
+        .modal-overlay { background: rgba(5, 5, 5, 0.98); backdrop-filter: blur(15px); }
+        
+        /* Fixed Slim Slider - Ensures Payables stay visible */
+        #order-slider { position: fixed; top: 20px; right: -400px; width: 280px; z-index: 6000; transition: all 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275); }
+        #order-slider.active { right: 20px; }
+        
+        #ai-chat-window { bottom: 100px; right: 30px; width: 350px; height: 480px; display: none; z-index: 4000; border: 1px solid rgba(99, 102, 241, 0.2); background: #0a0a0c; border-radius: 24px; flex-direction: column; }
+        .ai-typing { display: flex; gap: 4px; padding: 10px; }
+        .dot { width: 4px; height: 4px; background: var(--accent); border-radius: 50%; animation: blink 1.4s infinite; }
+        @keyframes blink { 0%, 100% { opacity: 0.2; } 20% { opacity: 1; } }
+        .back-btn { background: rgba(255,255,255,0.03); transition: 0.3s; border: 1px solid rgba(255,255,255,0.1); cursor: pointer; }
+        .back-btn:hover { background: var(--accent); color: white; }
+    </style>
+</head>
+<body class="min-h-screen">
+
+    <div id="order-slider" class="formal-dark p-4 rounded-2xl shadow-2xl border-indigo-500/40 bg-black/90 backdrop-blur-md">
+        <div class="flex items-center justify-between mb-2">
+            <span class="text-[8px] font-black text-indigo-400 uppercase tracking-widest italic">New Alert</span>
+            <div class="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-ping"></div>
+        </div>
+        <div id="slider-content" class="text-xs font-bold text-white uppercase italic">Scanning...</div>
+    </div>
+
+    <div id="authPage" class="fixed inset-0 z-[10000] flex items-center justify-center p-8 bg-black">
+        <div class="max-w-md w-full formal-dark p-10 rounded-3xl shadow-2xl border-t-4 border-indigo-600">
+            <div class="text-center mb-8">
+                <div class="w-16 h-16 bg-indigo-600 rounded-2xl mx-auto mb-4 flex items-center justify-center text-2xl shadow-lg">📦</div>
+                <h1 class="text-2xl font-bold tracking-tighter text-white uppercase">CoreInventory</h1>
+            </div>
+
+            <div id="loginSection">
+                <form id="loginForm" class="space-y-6">
+                    <input type="text" id="loginU" required class="w-full px-5 py-4 bg-black border border-white/10 rounded-xl text-white outline-none focus:border-indigo-500" placeholder="admin">
+                    <input type="password" id="loginP" required class="w-full px-5 py-4 bg-black border border-white/10 rounded-xl text-white outline-none focus:border-indigo-500" placeholder="admin123">
+                    <button type="submit" class="w-full py-4 bg-indigo-600 rounded-xl font-bold uppercase tracking-widest active:scale-95 transition-all">Establish Link</button>
+                    <button type="button" onclick="toggleAuth('signup')" class="w-full text-[10px] font-bold uppercase text-slate-500 mt-4 tracking-widest hover:text-indigo-400 transition">Register New User</button>
+                </form>
+            </div>
+
+            <div id="signupSection" class="hidden">
+                <form id="signupForm" class="space-y-4">
+                    <input type="text" placeholder="Full Name" required class="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-white text-sm outline-none">
+                    <input type="tel" placeholder="Mobile" required class="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-white text-sm outline-none">
+                    <textarea placeholder="Business Address" required class="w-full px-4 py-3 bg-black border border-white/10 rounded-xl text-white text-sm outline-none" rows="2"></textarea>
+                    <button type="button" onclick="completeRegistration()" class="w-full py-4 bg-emerald-600 rounded-xl font-bold uppercase tracking-widest mt-4">Create Account</button>
+                    <button type="button" onclick="toggleAuth('login')" class="w-full text-xs text-slate-500 mt-2">Back to Login</button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="dashboardPage" class="hidden h-screen flex overflow-hidden">
+        <aside class="w-72 sidebar-dark flex flex-col">
+            <div class="p-8 border-b border-white/5">
+                <h2 class="text-xl font-black text-white italic tracking-widest uppercase">Dashboard</h2>
+                <div class="mt-4 p-3 formal-dark rounded-xl flex items-center space-x-2">
+                    <div class="w-8 h-8 bg-indigo-600 rounded-lg flex items-center justify-center font-bold text-xs text-white">KP</div>
+                    <div><div class="text-[10px] font-bold">Khush Patel</div><div class="text-[8px] text-slate-500 uppercase">AHD Node</div></div>
+                </div>
+            </div>
+            <nav class="flex-1 p-4 space-y-2">
+                <button onclick="location.reload()" class="w-full flex items-center px-4 py-3 bg-indigo-600 text-white rounded-xl font-bold"><i class="fas fa-home mr-3"></i>Terminal</button>
+                <button onclick="openModal('createProductModal')" class="w-full flex items-center px-4 py-3 text-slate-400 hover:bg-white/5 rounded-xl transition"><i class="fas fa-plus mr-3"></i>New Asset</button>
+                <button onclick="startScanner()" class="w-full flex items-center px-4 py-3 text-slate-400 hover:bg-white/5 rounded-xl transition"><i class="fas fa-barcode mr-3"></i>Scanner</button>
+                <button onclick="showAdvancedDeliveries()" class="w-full flex items-center px-4 py-3 text-slate-400 hover:bg-white/5 rounded-xl transition"><i class="fas fa-truck mr-3"></i>Logistics</button>
+            </nav>
+            <div class="p-4 border-t border-white/5 space-y-2">
+                <button onclick="showCustomerCare()" class="w-full flex items-center px-4 py-2 text-[10px] font-bold text-slate-500 hover:text-indigo-400 uppercase tracking-widest transition"><i class="fas fa-headset mr-3"></i>Customer Care</button>
+                <button onclick="openModal('helpModal')" class="w-full flex items-center px-4 py-2 text-[10px] font-bold text-slate-500 hover:text-indigo-400 uppercase tracking-widest transition"><i class="fas fa-question-circle mr-3"></i>Help Node</button>
+            </div>
+        </aside>
+
+        <div class="flex-1 flex flex-col overflow-hidden">
+            <header class="h-20 border-b border-white/5 px-8 flex justify-between items-center bg-black/20">
+                <div class="flex items-center space-x-3"><div class="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div><span class="text-[10px] font-black tracking-widest text-slate-500 uppercase">Live Node Data</span></div>
+                <div id="clock" class="text-indigo-400 font-mono font-bold text-lg italic"></div>
+                <button onclick="location.reload()" class="text-[10px] font-bold text-red-500 uppercase tracking-widest">Terminate</button>
+            </header>
+
+            <main class="p-8 overflow-y-auto space-y-8">
+                <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-4">
+                    <div class="formal-dark p-5 rounded-2xl shadow-xl hover:border-indigo-500 transition-all cursor-pointer" onclick="showSkuInventory()">
+                        <div class="text-[8px] text-slate-500 font-bold uppercase mb-2">Total SKU <i class="fas fa-external-link-alt ml-1"></i></div>
+                        <div id="skuCounter" class="text-2xl font-black text-white">245</div>
+                        <div id="ticker" class="h-10 overflow-hidden mt-2 text-[8px] font-mono opacity-30 border-t border-white/5 pt-1"></div>
+                    </div>
+                    <div class="formal-dark p-5 rounded-2xl border-orange-500/20 cursor-pointer" onclick="showLowStockLongevity()"><p class="text-[8px] text-orange-500 font-bold uppercase mb-2">Low Stock</p><div class="text-2xl font-black text-orange-400 italic">12</div></div>
+                    <div class="formal-dark p-5 rounded-2xl border-red-500/20 cursor-pointer" onclick="showOutOfStockReorder()"><p class="text-[8px] text-red-500 font-bold uppercase mb-2">Zero Stock</p><div class="text-2xl font-black text-red-500 italic">03</div></div>
+                    <div class="formal-dark p-5 rounded-2xl cursor-pointer" onclick="showReceipts()"><p class="text-[8px] text-emerald-500 font-bold uppercase mb-2">Receipts</p><div class="text-2xl font-black text-emerald-400 italic">08</div></div>
+                    <div class="formal-dark p-5 rounded-2xl cursor-pointer" onclick="showAdvancedDeliveries()"><p class="text-[8px] text-indigo-400 font-bold uppercase mb-2">Fleet</p><div class="text-2xl font-black text-indigo-400 italic">12</div></div>
+                    <div id="payable-card" class="formal-dark p-5 rounded-2xl border-yellow-500/20 cursor-pointer" onclick="showPendingPayments()"><p class="text-[8px] text-yellow-500 font-bold uppercase mb-2">Payables</p><div class="text-2xl font-black text-yellow-500 italic">₹4.2L</div></div>
+                </div>
+
+                <div class="grid grid-cols-1 xl:grid-cols-3 gap-8">
+                    <div class="xl:col-span-2 formal-dark rounded-3xl overflow-hidden shadow-2xl">
+                        <div class="p-6 border-b border-white/5 bg-white/5 flex justify-between"><h3 class="text-xs font-bold uppercase tracking-widest text-slate-400 italic">Inventory Sync Ledger</h3></div>
+                        <div class="p-6 overflow-x-auto"><table class="w-full text-left text-[11px] font-mono"><thead class="text-slate-600"><tr><th class="pb-4 uppercase">Asset</th><th class="pb-4 uppercase text-center">Movement</th><th class="pb-4 uppercase text-right">Qty</th></tr></thead><tbody id="ledgerBody"></tbody></table></div>
+                    </div>
+                    <div class="formal-dark rounded-3xl flex flex-col shadow-2xl border-indigo-500/10">
+                        <div class="p-6 border-b border-indigo-500/10 bg-indigo-500/5"><h3 class="text-xs font-bold uppercase text-indigo-400 italic tracking-widest">Live Orders</h3></div>
+                        <div class="p-6 space-y-4 flex-1 overflow-y-auto" id="orderQueue"></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div id="createProductModal" class="fixed inset-0 z-[8000] hidden modal-overlay flex items-center justify-center p-4">
+        <div class="w-full max-w-lg formal-dark rounded-3xl p-8 shadow-2xl">
+            <div class="flex justify-between items-center mb-8"><button onclick="closeModal('createProductModal')" class="back-btn px-4 py-1 text-[10px] rounded-lg uppercase">Back</button><h2 class="text-xs font-bold uppercase text-indigo-400 italic">Register Asset</h2></div>
+            <form id="productForm" class="space-y-4">
+                <input type="text" id="p_name" required class="w-full bg-black border border-white/10 p-4 rounded-xl text-xs text-white outline-none" placeholder="Asset Formal Name">
+                <input type="text" id="p_sku" required class="w-full bg-black border border-white/10 p-4 rounded-xl text-xs text-white outline-none" placeholder="SKU Node Code">
+                <input type="number" id="p_stock" required class="w-full bg-black border border-white/10 p-4 rounded-xl text-xs text-white outline-none" placeholder="Initial Stock Quantity">
+                <button type="submit" class="w-full py-4 bg-indigo-600 rounded-xl font-black uppercase text-xs tracking-widest mt-4 hover:bg-indigo-700 transition">Authorize Sync</button>
+            </form>
+        </div>
+    </div>
+
+    <div id="skuMatrixModal" class="fixed inset-0 z-[8000] hidden modal-overlay flex items-center justify-center p-4">
+        <div class="w-full max-w-5xl formal-dark p-10 rounded-3xl shadow-2xl overflow-y-auto max-h-[90vh]">
+            <div class="flex justify-between items-center mb-10 border-b border-white/5 pb-6">
+                <button onclick="closeModal('skuMatrixModal')" class="back-btn px-6 py-2 rounded-xl text-[10px] font-black uppercase"><i class="fas fa-arrow-left mr-2"></i> Dashboard</button>
+                <div class="flex items-center gap-4">
+                    <button onclick="closeModal('skuMatrixModal'); openModal('createProductModal');" class="bg-indigo-600 px-4 py-2 rounded-lg text-[10px] font-bold uppercase">+ Add More</button>
+                    <h2 class="text-indigo-400 uppercase font-black italic text-xs">Node SKU Matrix</h2>
+                </div>
+            </div>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="skuMatrixGrid"></div>
+        </div>
+    </div>
+
+    <button onclick="toggleAIChat()" class="fixed bottom-8 right-8 w-16 h-16 bg-indigo-600 rounded-2xl shadow-2xl flex items-center justify-center text-white text-2xl active:scale-95 transition-all z-[7000] border border-white/10"><i class="fas fa-brain"></i></button>
+    <div id="ai-chat-window" class="fixed flex flex-col">
+        <div class="bg-indigo-600 p-5 text-white font-bold flex justify-between items-center"><span class="text-xs uppercase tracking-widest italic">Neural AI Assistant</span><button onclick="toggleAIChat()"><i class="fas fa-times"></i></button></div>
+        <div id="chat-messages" class="flex-1 p-6 space-y-4 overflow-y-auto text-[11px] text-slate-300"><div class="bg-white/5 p-3 rounded-2xl border border-white/5 italic">System online. How can I help with your inventory today?</div></div>
+        <div class="p-4 border-t border-white/5 flex gap-2 bg-black/60"><input id="chat-input" type="text" placeholder="State your query..." class="flex-1 bg-transparent text-xs outline-none text-white"><button onclick="sendAI()" class="text-indigo-400 hover:text-white transition-all"><i class="fas fa-paper-plane"></i></button></div>
+    </div>
+
+    <div id="careModal" class="fixed inset-0 z-[8000] hidden modal-overlay flex items-center justify-center p-4"><div class="max-w-md w-full formal-dark p-10 rounded-3xl text-center shadow-2xl"><h2 class="text-indigo-400 uppercase font-black mb-6 italic">Support Node</h2><div id="randomSupportNum" class="text-4xl font-black text-white tracking-widest mb-10 font-mono">0000-000-000</div><button onclick="closeModal('careModal')" class="back-btn w-full py-4 rounded-xl text-xs font-bold uppercase">Return</button></div></div>
+    <div id="helpModal" class="fixed inset-0 z-[8000] hidden modal-overlay flex items-center justify-center p-4"><div class="w-full max-w-xl formal-dark p-10 rounded-3xl shadow-2xl border border-white/5"><div class="flex justify-between items-center mb-8"><button onclick="closeModal('helpModal')" class="back-btn px-4 py-2 rounded-xl text-[10px] font-bold">BACK</button><h2 class="text-indigo-400 font-bold italic uppercase text-xs">Help Node</h2></div><p class="text-slate-400 text-[11px] leading-relaxed italic">Asset Registration: Use formal node codes. | Scanning: Optical link via emerald node. | Finance: UPI settlement enabled. | AI: Neural assistant processes stock velocity.</p></div></div>
+    <div id="receiptsModal" class="fixed inset-0 z-[8000] hidden modal-overlay flex items-center justify-center p-4"><div class="w-full max-w-3xl formal-dark p-8 rounded-3xl shadow-2xl"><div class="flex justify-between mb-8"><button onclick="closeModal('receiptsModal')" class="back-btn px-4 py-2 rounded-xl text-[10px] font-bold uppercase">BACK</button><h2 class="text-xs uppercase text-slate-500 font-bold italic">Audit Archive</h2></div><div class="space-y-4" id="receiptsList"></div></div></div>
+    <div id="deliveryModal" class="fixed inset-0 z-[8000] hidden modal-overlay flex items-center justify-center p-4"><div class="w-full max-w-6xl formal-dark p-10 rounded-3xl overflow-y-auto max-h-[95vh] shadow-2xl"><div class="flex justify-between mb-8 pb-4 border-b border-white/5"><button onclick="closeModal('deliveryModal')" class="back-btn px-6 py-2 rounded-xl text-xs font-black uppercase tracking-widest">BACK</button><h2 class="text-slate-500 uppercase font-black italic text-xs">Fleet Logistics</h2></div><div id="deliveryContainer" class="grid grid-cols-1 lg:grid-cols-2 gap-10"></div></div></div>
+    <div id="longevityModal" class="fixed inset-0 z-[8000] hidden modal-overlay flex items-center justify-center p-4"><div class="w-full max-w-2xl formal-dark p-8 rounded-3xl shadow-2xl"><div class="flex justify-between items-center mb-8"><button onclick="closeModal('longevityModal')" class="back-btn px-4 py-2 rounded-xl text-[10px] font-bold uppercase">BACK</button><h2 class="text-orange-500 font-bold uppercase italic text-xs tracking-widest">AI analysis</h2></div><div id="longevityList" class="space-y-4"></div></div></div>
+    <div id="reorderModal" class="fixed inset-0 z-[8000] hidden modal-overlay flex items-center justify-center p-4"><div class="w-full max-w-2xl formal-dark p-8 rounded-3xl shadow-2xl border-red-500/20"><div class="flex justify-between items-center mb-8"><button onclick="closeModal('reorderModal')" class="back-btn px-4 py-2 rounded-xl text-[10px] font-bold text-red-500 uppercase">BACK</button><h2 class="text-red-500 font-bold uppercase italic text-xs tracking-widest">Emergency WA</h2></div><div id="reorderList" class="space-y-4"></div></div></div>
+    <div id="paymentsModal" class="fixed inset-0 z-[8000] hidden modal-overlay flex items-center justify-center p-4"><div class="w-full max-w-4xl formal-dark p-8 rounded-3xl shadow-2xl"><div class="flex justify-between mb-8"><button onclick="closeModal('paymentsModal')" class="back-btn px-4 py-2 rounded-xl text-[10px] font-bold uppercase">BACK</button><h2 class="text-xs uppercase text-yellow-500 font-bold italic tracking-widest">Settlement Portal</h2></div><div id="supplierList" class="grid grid-cols-1 md:grid-cols-2 gap-6"></div></div></div>
+    <div id="scannerModal" class="fixed inset-0 z-[8000] hidden modal-overlay flex items-center justify-center p-4"><div class="w-full max-w-md formal-dark rounded-3xl p-8 text-center border border-indigo-500/20"><div id="reader"></div><button onclick="stopScanner()" class="mt-4 px-6 py-2 bg-slate-800 rounded-xl text-[10px] font-black uppercase">Abort Scan</button></div></div>
+
+    <script>
+        const { jsPDF } = window.jspdf;
+        let html5QrCode;
+
+        // DB Core
+        let inventory = [
+            {name: 'Titanium Rods', code: 'TITAN-01', qty: 150, cat: 'Raw Material', supplier: 'MetalsInd', price: 125000, lat: 23.06, lng: 72.65, vehicle: 'Fleet_01', address: 'Plot 44, Naroda GIDC', loc: 'Rack A-12'},
+            {name: 'Neural Server Rack', code: 'NS-004', qty: 12, cat: 'Finished Good', supplier: 'TechCore', price: 82000, lat: 23.02, lng: 72.53, vehicle: 'Fleet_18', address: 'SG Highway IT Park', loc: 'Vault-B'},
+            {name: 'Optic Fiber Spools', code: 'OF-X', qty: 0, cat: 'Materials', supplier: 'GlassLink', price: 45000, lat: 23.07, lng: 72.51, vehicle: 'Fleet_02', address: 'Chandkheda Zone', loc: 'Basement-1'}
+        ];
+
+        let pendingOrders = [
+            {id: 'ORD_9901', cust: 'Reliance Digital', mobile: '98765-XXXXX', amt: 450000, item: 'Titanium Rods', addr: 'Naroda Hub'},
+            {id: 'ORD_9902', cust: 'Adani Logistics', mobile: '99001-XXXXX', amt: 2200000, item: 'Neural Server Rack', addr: 'Mundra Node'},
+            {id: 'ORD_9903', cust: 'Tata Steel', mobile: '88112-XXXXX', amt: 125000, item: 'Titanium Rods', addr: 'Jamshedpur Node'}
+        ];
+        let currentIdx = 0;
+
+        // Auth
+        function toggleAuth(m) { document.getElementById('loginSection').classList.toggle('hidden', m === 'signup'); document.getElementById('signupSection').classList.toggle('hidden', m === 'login'); }
+        function completeRegistration() { alert("Node Created. Authorization granted."); toggleAuth('login'); }
+        function requestOTP() { alert("Verification Skip: Node Registered."); }
+        
+        document.getElementById('loginForm').onsubmit = (e) => { 
+            e.preventDefault(); 
+            document.getElementById('authPage').style.display = 'none'; 
+            document.getElementById('dashboardPage').classList.remove('hidden'); 
+            renderAll(); 
+            setTimeout(cycleOrderNotification, 1500); 
+        };
+
+        // ASSET ADDITION ENGINE
+        document.getElementById('productForm').onsubmit = (e) => {
+            e.preventDefault();
+            const name = document.getElementById('p_name').value;
+            const sku = document.getElementById('p_sku').value;
+            const qty = parseInt(document.getElementById('p_stock').value);
+            
+            inventory.push({
+                name: name, code: sku, qty: qty, 
+                cat: 'Manual Node', supplier: 'Direct Entry', price: 15000,
+                lat: 23.0, lng: 72.0, vehicle: 'V_Fleet', address: 'Ahmedabad HQ',
+                loc: 'B-Zone-' + Math.floor(Math.random()*20)
+            });
+            
+            document.getElementById('skuCounter').innerText = 245 + (inventory.length - 3);
+            alert(`Asset ${name} synchronized to node.`);
+            
+            // UX: Close Modal automatically after add
+            closeModal('createProductModal');
+            document.getElementById('productForm').reset();
+            renderLedger();
+        };
+
+        // TOTAL SKU MATRIX REFRESH
+        function showSkuInventory() {
+            openModal('skuMatrixModal');
+            const grid = document.getElementById('skuMatrixGrid');
+            grid.innerHTML = inventory.map(i => `
+                <div class="formal-dark p-6 rounded-2xl space-y-4 hover:border-indigo-500 transition-all border-white/5 shadow-xl">
+                    <div class="text-[9px] font-bold text-indigo-400 uppercase tracking-widest italic">${i.code}</div>
+                    <div class="text-xl font-bold italic text-white uppercase tracking-tighter">${i.name}</div>
+                    <div class="flex justify-between pt-4 border-t border-white/5">
+                        <div><p class="text-[9px] text-slate-500 uppercase">Qty</p><div class="text-2xl font-black text-indigo-500">${i.qty}</div></div>
+                        <div class="text-right"><p class="text-[9px] text-slate-500 uppercase">Storage Loc</p><div class="text-sm font-bold text-white italic uppercase">${i.loc}</div></div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // ORDER SLIDER (7s DELAY)
+        function cycleOrderNotification() {
+            if (currentIdx >= pendingOrders.length) return;
+            const o = pendingOrders[currentIdx];
+            const slider = document.getElementById('order-slider');
+            document.getElementById('slider-content').innerText = `Incoming Node: ${o.cust}`;
+            slider.classList.add('active');
+            renderOrders();
+        }
+
+        function handleOrderAction(id, action) {
+            document.getElementById('order-slider').classList.remove('active');
+            if (action === 'accept') {
+                const o = pendingOrders[currentIdx];
+                alert(`Authorization code accepted. Generating Detailed Audit for ${o.cust}.`);
+                generateDetailedPDF(o);
+            }
+            currentIdx++;
+            // 7 SECOND DELAY AS REQUESTED
+            setTimeout(cycleOrderNotification, 7000); 
+        }
+
+        function renderOrders() {
+            const box = document.getElementById('orderQueue');
+            if (currentIdx >= pendingOrders.length) { box.innerHTML = `<p class="text-[9px] text-slate-700 text-center mt-10 uppercase font-black tracking-widest">Queue Clear</p>`; return; }
+            const o = pendingOrders[currentIdx];
+            box.innerHTML = `<div class="formal-dark p-6 rounded-3xl border-indigo-500/20 space-y-4 shadow-xl animate-pulse">
+                <div class="flex justify-between text-[10px] font-black text-indigo-400"><span>${o.id}</span><span>₹${o.amt.toLocaleString()}</span></div>
+                <div class="font-black text-xs uppercase italic text-white">${o.cust}</div>
+                <div class="text-[9px] text-slate-600 font-mono italic">Asset: ${o.item}</div>
+                <div class="flex gap-2 pt-2"><button onclick="handleOrderAction('${o.id}', 'accept')" class="flex-1 bg-emerald-600/20 text-emerald-400 border border-emerald-500/30 py-3 rounded-xl text-[9px] font-black uppercase">Accept</button><button onclick="handleOrderAction('${o.id}', 'reject')" class="flex-1 bg-red-600/20 text-red-400 border border-red-500/30 py-3 rounded-xl text-[9px] font-black uppercase">Reject</button></div></div>`;
+        }
+
+        // AI ASSISTANT (FIXED LOGIC)
+        function toggleAIChat() { const w = document.getElementById('ai-chat-window'); w.style.display = (w.style.display === 'flex' ? 'none' : 'flex'); }
+        function sendAI() {
+            const input = document.getElementById('chat-input');
+            const box = document.getElementById('chat-messages');
+            const text = input.value.trim();
+            if(!text) return;
+
+            box.innerHTML += `<div class="bg-indigo-600/20 p-3 rounded-2xl ml-auto text-right max-w-[85%] border border-indigo-500/10 text-white">${text}</div>`;
+            input.value = "";
+            box.innerHTML += `<div class="ai-typing"><div class="dot"></div><div class="dot" style="animation-delay: 0.2s"></div><div class="dot" style="animation-delay: 0.4s"></div></div>`;
+            box.scrollTop = box.scrollHeight;
+
+            setTimeout(() => {
+                const typers = document.querySelectorAll('.ai-typing');
+                typers.forEach(t => t.remove());
+                let reply = "Processing Node Inventory Matrix... ";
+                const q = text.toLowerCase();
+                if(q.includes("stock") || q.includes("product") || q.includes("qty")) reply += `Ahmedabad node is current tracking ${inventory.length} distinct asset classes. Fiber spools are currently zero.`;
+                else if(q.includes("delivery") || q.includes("fleet")) reply += "Logistics node reporting Fleet_01 GJ at 75% Naroda route completion.";
+                else if(q.includes("payment") || q.includes("money")) reply += "Finance node reports ₹4.2L in overdue credits to SteelCorp.";
+                else reply += "Neural logic active. Specify Stock, Logistics, or Financial query for this node.";
+                
+                box.innerHTML += `<div class="bg-white/5 p-3 rounded-2xl mr-auto max-w-[85%] border border-white/5 text-slate-300 font-italic">${reply}</div>`;
+                box.scrollTop = box.scrollHeight;
+            }, 1000);
+        }
+
+        // Detailed Audit PDF Generator
+        function generateDetailedPDF(o) {
+            const doc = new jsPDF();
+            const gst = (o.amt * 0.18).toFixed(2);
+            doc.setFillColor(15, 15, 20); doc.rect(0, 0, 210, 50, 'F');
+            doc.setTextColor(255, 255, 255); doc.setFontSize(26); doc.text("COREINVENTORY ENTERPRISE", 20, 30);
+            doc.setFontSize(10); doc.text(`REF_ID: INV-NODE-${Math.floor(1000+Math.random()*9000)}`, 140, 65);
+            doc.setTextColor(50, 50, 50); doc.text("BILL TO:", 20, 75); doc.setFont("helvetica", "bold"); doc.text(o.cust, 20, 80);
+            doc.setFont("helvetica", "normal"); doc.text(`Mobile: ${o.mobile}`, 20, 85); doc.text(`Address: ${o.addr}`, 20, 90);
+            doc.autoTable({ startY: 100, head: [['Description', 'Qty', 'Base (INR)', 'GST (18%)']], body: [[o.item, '1', o.amt.toLocaleString(), parseFloat(gst).toLocaleString()]], theme: 'grid', headStyles: { fillColor: [99, 102, 241] } });
+            doc.setFont("helvetica", "bold"); doc.text(`TOTAL AUDIT VALUE: INR ${(o.amt * 1.18).toLocaleString()}`, 130, doc.previousAutoTable.finalY + 15);
+            doc.save(`Invoice_${o.id}.pdf`);
+        }
+
+        // Render Helpers
+        function showCustomerCare() { openModal('careModal'); document.getElementById('randomSupportNum').innerText = "1800-" + Math.floor(100+Math.random()*900) + "-" + Math.floor(1000+Math.random()*9000); }
+        function renderLedger() { document.getElementById('ledgerBody').innerHTML = inventory.slice().reverse().map(p => `<tr class="border-b border-white/5"><td class="py-5 font-black uppercase italic text-slate-300 text-[10px]">${p.name}</td><td class="py-5 text-[8px] opacity-40 uppercase text-center italic">Entry synchronized</td><td class="py-5 font-bold text-indigo-400 text-right">${p.qty}</td></tr>`).join(''); }
+        function renderAll() { renderOrders(); renderLedger(); }
+        function openModal(id) { document.getElementById(id).classList.remove('hidden'); }
+        function closeModal(id) { document.getElementById(id).classList.add('hidden'); }
+        function startScanner() { openModal('scannerModal'); html5QrCode = new Html5Qrcode("reader"); html5QrCode.start({ facingMode: "environment" }, { fps: 10, qrbox: 250 }, (txt) => { alert("Scanned: " + txt); stopScanner(); }); }
+        function stopScanner() { if(html5QrCode) html5QrCode.stop().then(() => closeModal('scannerModal')); }
+        function showLowStockLongevity() { openModal('longevityModal'); document.getElementById('longevityList').innerHTML = inventory.filter(i => i.qty > 0 && i.qty < 20).map(i => `<div class="p-6 formal-dark rounded-2xl flex justify-between items-center shadow-inner"><div><div class="font-bold text-white uppercase italic text-sm">${i.name}</div><div class="text-[9px] text-slate-500 italic">Storage Bin: ${i.loc}</div></div><div class="text-right font-black text-orange-500 text-xl italic">${Math.ceil(i.qty/3)} DAYS</div></div>`).join(''); }
+        function showOutOfStockReorder() { openModal('reorderModal'); document.getElementById('reorderList').innerHTML = inventory.filter(i => i.qty === 0).map(i => `<div class="p-6 formal-dark rounded-2xl flex justify-between items-center border border-red-500/20"><div><div class="font-bold text-white italic text-sm uppercase">${i.name}</div><div class="text-[9px] text-red-500 font-bold uppercase tracking-widest mt-1 italic">Supply node terminated</div></div><button onclick="window.open('https://wa.me/910000000000?text=REORDER_NODE_${i.code}')" class="bg-emerald-600/80 hover:bg-emerald-600 px-6 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest"><i class="fab fa-whatsapp mr-2"></i> WA Reorder</button></div>`).join(''); }
+        function showAdvancedDeliveries() { openModal('deliveryModal'); document.getElementById('deliveryContainer').innerHTML = inventory.slice(0,2).map(d => `<div class="formal-dark p-10 rounded-3xl space-y-6"><div class="flex justify-between border-b border-white/5 pb-6"><div><div class="text-indigo-400 text-[9px] font-black uppercase tracking-widest">NODE_SIG: ${d.code}</div><h4 class="text-2xl font-black italic uppercase text-white tracking-tighter">${d.name}</h4></div><div class="text-emerald-500 font-black uppercase text-[10px] tracking-widest">Active node</div></div><div class="text-[9px] font-mono text-slate-500 uppercase tracking-widest italic">VHC: ${d.vehicle} | DEST: ${d.address}</div><iframe class="map-frame" src="https://maps.google.com/maps?q=${d.lat},${d.lng}&t=&z=13&ie=UTF8&iwloc=&output=embed" frameborder="0"></iframe><button onclick="alert('Arrival code verified.')" class="w-full bg-emerald-600 hover:bg-emerald-700 py-4 rounded-2xl font-black text-xs uppercase tracking-widest">Validate Arrival</button></div>`).join(''); }
+        function showReceipts() { openModal('receiptsModal'); document.getElementById('receiptsList').innerHTML = inventory.map(i => `<div class="p-5 formal-dark flex justify-between items-center rounded-2xl border-white/5 hover:border-emerald-500 transition-all shadow-xl"><div><div class="font-bold italic text-sm text-white uppercase tracking-tighter">${i.name}</div><div class="text-[9px] text-slate-600 font-mono italic">ID: ${i.code}</div></div><button onclick='generateDetailedPDF({cust:"Archive_Node", item: "${i.name}", amt: ${i.price}, mobile:"X-LOG", addr:"Ahmedabad Node", id:"${i.code}"})' class="bg-emerald-600/10 text-emerald-400 px-6 py-2 rounded-xl text-[10px] font-black uppercase border border-emerald-500/20">Audit PDF</button></div>`).join(''); }
+        function showPendingPayments() { openModal('paymentsModal'); document.getElementById('supplierList').innerHTML = inventory.map(s => `<div class="formal-dark p-6 rounded-3xl border-yellow-500/10 bg-gradient-to-br from-[#121214] to-black shadow-inner"><h3 class="font-black italic uppercase text-slate-400 text-xs tracking-widest">${s.supplier}</h3><div class="text-3xl font-black text-yellow-500 my-6 font-mono tracking-tighter">₹${(s.price || 0).toLocaleString()}</div><div class="grid grid-cols-1 gap-3"><button onclick="alert('UPI Link Activated.')" class="bg-white/5 border border-white/10 p-3 rounded-xl text-[10px] font-black uppercase hover:bg-indigo-600 transition-all italic">Settle via UPI</button></div></div>`).join(''); }
+
+        setInterval(() => { document.getElementById('clock').innerText = new Date().toLocaleTimeString('en-IN', {timeZone: 'Asia/Kolkata'}); }, 1000);
+    </script>
+</body>
+</html>
